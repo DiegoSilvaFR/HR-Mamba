@@ -2,8 +2,6 @@
 
 This document describes a simple heart-rate regression pipeline using accelerometer windows and a Mamba-inspired temporal backbone.
 
-> **Important:** this is a **Mamba-like / selective SSM-inspired** architecture, not the official optimized `mamba-ssm` implementation. The goal is to test the research idea without depending on CUDA extensions such as `mamba-ssm` or `causal-conv1d`.
-
 ## Pipeline overview
 
 ![ACC window to one HR prediction](hr_mamba_descrip.png)
@@ -203,19 +201,3 @@ ACC → HR regression
 masked ACC → ACC reconstruction
 ACC → HR regression + masked ACC reconstruction
 ```
-
-## Scientific wording
-
-Use cautious wording:
-
-```text
-Mamba-inspired selective SSM backbone
-```
-
-or:
-
-```text
-lightweight bidirectional selective SSM backbone
-```
-
-Avoid claiming it is the official Mamba implementation unless you are using the official `mamba-ssm` package.

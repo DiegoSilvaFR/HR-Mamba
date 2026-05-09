@@ -116,7 +116,7 @@ class SelectiveSSM(nn.Module):
         return self.dropout(y)
 
 
-class BiMambaLikeBlock(nn.Module):
+class BiMambaBlock(nn.Module):
     """
     Bidirectional Mamba-like block.
 
@@ -172,7 +172,7 @@ class BiMambaLikeBlock(nn.Module):
         return residual + self.dropout(y)
 
 
-class HRMambaLikeRegressor(nn.Module):
+class HRMambaRegressor(nn.Module):
     """
     Mamba-like backbone for heart-rate regression from accelerometer windows.
 
@@ -215,7 +215,7 @@ class HRMambaLikeRegressor(nn.Module):
 
         self.blocks = nn.ModuleList(
             [
-                BiMambaLikeBlock(
+                BiMambaBlock(
                     d_model=d_model,
                     d_state=d_state,
                     expand=expand,
