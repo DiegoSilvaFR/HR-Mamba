@@ -326,12 +326,6 @@ def load_backbone_only_from_checkpoint(model, ckpt_path: str, device: str):
     return model
 
 
-def get_head_parameters(model):
-    if hasattr(model, "classifier"):
-        return list(model.classifier.parameters())
-    raise ValueError("Model has no attribute 'classifier'.")
-
-
 
 # -----------------------------
 # Main
@@ -394,10 +388,10 @@ def main():
     train_ds = HRDataset(
         file_list_path=args.train_file_list,
         num_sample_per_subject=args.num_sample_per_subject,
-        ratio2keep=args.ratio2keep,
+        ratio2keep=1,
         weighted_sample=args.weighted_sample,
-        hr_min=args.hr_min,
-        hr_max=args.hr_max,
+        hr_min=None, 
+        hr_max=None,
         is_hr_classification=is_hr_classification,
         hr_bins=hr_bins,
         expected_t=expected_t,
@@ -409,8 +403,8 @@ def main():
         num_sample_per_subject=args.num_sample_test,
         ratio2keep=1.0,
         weighted_sample=False,
-        hr_min=args.hr_min,
-        hr_max=args.hr_max,
+        hr_min=None,
+        hr_max=None,
         is_hr_classification=is_hr_classification,
         hr_bins=hr_bins,
         expected_t=expected_t,

@@ -249,7 +249,7 @@ class HRMambaRegressor(nn.Module):
         if x.ndim == 4:
             x = x.squeeze(1)      # (B, T, C)
 
-        x = x.transpose(1, 2)     # (B, C, T)
+      #  x = x.transpose(1, 2)     # (B, C, T)
 
         x = self.patch_embed(x)   # (B, D, L)
         x = x.transpose(1, 2)     # (B, L, D)
