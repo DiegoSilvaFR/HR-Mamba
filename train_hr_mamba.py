@@ -10,10 +10,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_score, recall_score
-
-from sslearning.models.accNet import Resnet
-from sslearning.pytorchtools import EarlyStopping
-
+from models.hr_mamba import HRMambaRegressor
 
 # -----------------------------
 # Utilities
@@ -303,39 +300,6 @@ def infer_expected_t(epoch_len: int) -> int:
         raise ValueError(f"Unsupported epoch_len={epoch_len}. Use 5, 10 or 30.")
     return mapping[epoch_len]
 
-
-def create_local_resnet(num_outputs: int, resnet_version: int, epoch_len: int, device: str):
-    model = Resnet(
-        output_size=num_outputs,
-        resnet_version=resnet_version,
-        epoch_len=epoch_len,
-        is_mtl=False,
-        is_eva=False,
-    )
-    return model.float().to(device)
-
-
-def load_oxford_backbone_from_hub(epoch_len: int, num_outputs: int, device: str):
-    repo = "OxWearables/ssl-wearables"
-    if epoch_len == 5:
-        entry = "harnet5"
-    elif epoch_len == 10:
-        entry = "harnet10"
-    elif epoch_len == 30:
-        entry = "harnet30"
-    else:
-        raise ValueError(f"Unsupported epoch_len={epoch_len}. Use 5, 10 or 30.")
-
-    model = torch.hub.load(
-        repo,
-        entry,
-        pretrained=True,
-        class_num=num_outputs,
-        my_device=device,
-    )
-    return model.float().to(device)
-
-
 def load_backbone_only_from_checkpoint(model, ckpt_path: str, device: str):
     ckpt = torch.load(ckpt_path, map_location=device)
 
@@ -362,63 +326,11 @@ def load_backbone_only_from_checkpoint(model, ckpt_path: str, device: str):
     return model
 
 
-def build_model(args, num_outputs: int, device: str):
-    if args.init_mode == "scratch":
-        model = create_local_resnet(
-            num_outputs=num_outputs,
-            resnet_version=args.resnet_version,
-            epoch_len=args.epoch_len,
-            device=device,
-        )
-    elif args.init_mode == "oxford_hub":
-        model = load_oxford_backbone_from_hub(
-            epoch_len=args.epoch_len,
-            num_outputs=num_outputs,
-            device=device,
-        )
-    elif args.init_mode == "checkpoint":
-        if args.pretrained_backbone_path is None:
-            raise ValueError("--pretrained-backbone-path is required when --init-mode checkpoint")
-        model = create_local_resnet(
-            num_outputs=num_outputs,
-            resnet_version=args.resnet_version,
-            epoch_len=args.epoch_len,
-            device=device,
-        )
-        model = load_backbone_only_from_checkpoint(model, args.pretrained_backbone_path, device)
-    else:
-        raise ValueError(f"Unsupported init_mode={args.init_mode}")
-
-    return model
-
-
 def get_head_parameters(model):
     if hasattr(model, "classifier"):
         return list(model.classifier.parameters())
     raise ValueError("Model has no attribute 'classifier'.")
 
-
-def build_optimizer(model, lr: float, weight_decay: float, freeze_backbone: bool, bbackbone_lr_mult: float):
-    if freeze_backbone:
-        for p in model.feature_extractor.parameters():
-            p.requires_grad = False
-        head_params = [p for p in get_head_parameters(model) if p.requires_grad]
-        return torch.optim.Adam(head_params, lr=lr, weight_decay=weight_decay, amsgrad=True)
-
-    backbone_params = [p for p in model.feature_extractor.parameters() if p.requires_grad]
-    head_params = [p for p in get_head_parameters(model) if p.requires_grad]
-
-    if len(backbone_params) == 0:
-        return torch.optim.Adam(head_params, lr=lr, weight_decay=weight_decay, amsgrad=True)
-
-    return torch.optim.Adam(
-        [
-            {"params": backbone_params, "lr": lr * backbone_lr_mult},
-            {"params": head_params, "lr": lr},
-        ],
-        weight_decay=weight_decay,
-        amsgrad=True,
-    )
 
 
 # -----------------------------
@@ -441,19 +353,14 @@ def main():
     parser.add_argument("--batch-subject-num", type=int, default=4)
     parser.add_argument("--num-sample-per-subject", type=int, default=250)
     parser.add_argument("--num-sample-test", type=int, default=100)
-    parser.add_argument("--ratio2keep", type=float, default=1.0)
+
     parser.add_argument("--weighted-sample", action="store_true")
     parser.add_argument("--enmo-regression", action="store_true")
 
-    parser.add_argument("--resnet-version", type=int, default=1)
     parser.add_argument("--epoch-len", type=int, default=10, choices=[5, 10, 30])
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--version", type=int, default=1)
-
-    parser.add_argument("--hr-min", type=float, default=35.0)
-    parser.add_argument("--hr-max", type=float, default=220.0)
-
     # task mode
     parser.add_argument("--hr-classification", action="store_true")
     parser.add_argument(
@@ -462,18 +369,6 @@ def main():
         default="100",
         help="Comma-separated thresholds for HR classification, e.g. '100' or '80,100' or '50,65,80,95,110'",
     )
-
-    # initialization / fine-tuning mode
-    parser.add_argument(
-        "--init-mode",
-        type=str,
-        default="scratch",
-        choices=["scratch", "oxford_hub", "checkpoint"],
-        help="scratch = random init local Resnet; oxford_hub = load Oxford pretrained backbone from torch.hub; checkpoint = load backbone from local checkpoint.",
-    )
-    parser.add_argument("--pretrained-backbone-path", type=str, default=None)
-    parser.add_argument("--freeze-backbone", action="store_true")
-    parser.add_argument("--backbone-lr-mult", type=float, default=0.1)
 
     args = parser.parse_args()
 
@@ -489,11 +384,11 @@ def main():
 
     if is_hr_classification:
         hr_bins = np.array([float(x) for x in args.hr_bins.split(",") if x.strip() != ""], dtype=np.float32)
-        classes = len(hr_bins) + 1
+      
         suffix = "cls"
     else:
         hr_bins = None
-        classes = 1
+   
         suffix = "reg"
 
     train_ds = HRDataset(
@@ -542,8 +437,16 @@ def main():
         worker_init_fn=worker_init_fn,
     )
 
-    model = build_model(args=args, num_outputs=classes, device=device)
-
+    model = HRMambaRegressor(
+    input_channels=3,
+    seq_len=300,
+    patch_size=15,
+    stride=15,
+    d_model=128,
+    depth=4,
+    d_state=16,
+)
+    model = model.to(device)
     # optimizer = build_optimizer(
     #     model=model,
     #     lr=args.lr,
@@ -551,36 +454,24 @@ def main():
     #     freeze_backbone=args.freeze_backbone,
     #     backbone_lr_mult=args.backbone_lr_mult,
     # )
-    optimizer = torch.optim.Adam(
+
+    optimizer = torch.optim.AdamW(
     model.parameters(),
     lr=args.lr,
-    weight_decay=args.weight_decay,
-    amsgrad=True,
+    weight_decay=args.weight_decay
 )
 
     loss_fn = nn.CrossEntropyLoss() if is_hr_classification else nn.MSELoss()
 
-    init_suffix = {
-        "scratch": "scratch",
-        "oxford_hub": "oxfordhub",
-        "checkpoint": "ckpt",
-    }[args.init_mode]
-
+    init_suffix = 'MAMBA'
     best_path = os.path.join(args.save_dir, f"{main_target}_{suffix}_{init_suffix}_v{args.version}.mdl")
     hist_path = os.path.join(args.save_dir, f"{main_target}_evolution_parameters_v{args.version}_{suffix}_{init_suffix}.json")
 
-    early_stopping = EarlyStopping(
-        patience=args.patience,
-        path=best_path,
-        verbose=True,
-    )
-
-    if args.init_mode == "scratch":
-        print("Training mode: scratch")
-    elif args.freeze_backbone:
-        print(f"Training mode: {args.init_mode} + frozen backbone")
-    else:
-        print(f"Training mode: {args.init_mode} + full fine-tuning")
+    # early_stopping = EarlyStopping(
+    #     patience=args.patience,
+    #     path=best_path,
+    #     verbose=True,
+    # )
 
     evolution_parameters = {}
 
@@ -635,10 +526,10 @@ def main():
 
         print(msg)
 
-        early_stopping(test_metrics["loss"], model)
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
+        # early_stopping(test_metrics["loss"], model)
+        # if early_stopping.early_stop:
+        #     print("Early stopping")
+        #     break
 
     print(f"Best checkpoint saved to: {best_path}")
 

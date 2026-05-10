@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 class HRMambaFeatureExtractor(nn.Module):
-    
+
     def __init__(self, model, num_blocks=None, use_norm=False, pool="mean"):
         super().__init__()
 
@@ -67,7 +67,7 @@ class HRMambaFeatureExtractor(nn.Module):
 
         return x
 
-def make_feats(X: np.array, model: HRMambaRegressor) -> torch.tensor:
+def make_feats(X: np.array, model: HRMambaRegressor) -> np.array:
 
     """ X.shape = 3D array = [lines, columns, window size] """
 
@@ -107,4 +107,4 @@ def make_feats(X: np.array, model: HRMambaRegressor) -> torch.tensor:
 
     print("Total feats extracted: ", features.shape)
 
-    return features
+    return features.detach().cpu().numpy()
