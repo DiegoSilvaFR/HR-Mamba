@@ -4,7 +4,7 @@ This document describes a simple heart-rate regression pipeline using accelerome
 
 ## Pipeline overview
 
-![ACC window to one HR prediction](hr_mamba_descrip.png)
+<img src="hr_mamba_descrip.png" alt="ACC window to one HR prediction" width="80%">
 
 The model receives one 10-second accelerometer window and predicts one scalar heart-rate value for that full window.
 
