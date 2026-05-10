@@ -1,0 +1,10 @@
+{
+    "0": {
+        "train_loss": 5472.1113,
+        "train_mae": 71.0025,
+        "train_rmse": 73.9737,
+        "test_loss": 5707.0698,
+        "test_mae": 72.6196,
+        "test_rmse": 75.5452
+    }
+}

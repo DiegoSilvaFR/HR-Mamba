@@ -22,6 +22,9 @@ def set_seed(seed: int = 42) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+def save_model(model: HRMambaRegressor, path_name:str) -> None:
+    
+    torch.save(model.state_dict(), path_name)
 
 def worker_init_fn(worker_id: int) -> None:
     seed = torch.initial_seed() % 2**32
@@ -524,9 +527,9 @@ def main():
         # if early_stopping.early_stop:
         #     print("Early stopping")
         #     break
-
+    
     print(f"Best checkpoint saved to: {best_path}")
-
+    save_model(model, best_path)
     with open(hist_path, "w") as file:
         json.dump(evolution_parameters, file, indent=4)
 
